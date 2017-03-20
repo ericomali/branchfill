@@ -1,0 +1,91 @@
+#!/usr/bin/env ruby
+#
+# LICENSE
+# Copyright 2017 Eric Melville
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# DESCRIPTION
+# branchfill - fill in missing git branches for multi repo build systems
+#
+# Many companies make the somewhat dubious decision to split source code for
+# a single logical product into multiple repositories. Often, their build
+# system requires the branch name to exist in all relevant repositories. This
+# tool is intended to help out in that specific situation. Provide a default
+# branch name and a list of repository URLs in config.json, and when run with
+# a new branch name this tool will examine each repository in turn, creating
+# new branches off the default branch as needed.
+#
+# HISTORY
+# 0.1 - Initial version, iterate over configured URLs and run git commands
+#
+# TODO
+# Better error checking
+# More comprehensive interaction with git
+# Consider holding repositories locally
+
+require 'fileutils'
+require 'json'
+require 'tmpdir'
+
+if (ARGV.length != 1) then
+    print "need exactly one argument, name of branch to fill in\n"
+    exit(1)
+end
+branch = ARGV[0]
+
+cfgdat = File.read("config.json")
+cfgraw = JSON.parse(cfgdat)
+config = cfgraw['branchfill']
+
+defbase = config['default']
+workdir = Dir.mktmpdir()
+dash = Dir.getwd()
+
+repos = config['urls']
+repos.each { |repo|
+    print "processing " + repo + "\n"
+    Dir.chdir(workdir)
+    cmd = "git clone " + repo + " c >/dev/null 2>&1"
+    system cmd
+    Dir.chdir(workdir + "/c")
+
+    cmd = "git checkout " + branch + " >/dev/null 2>&1"
+    ret = system(cmd)
+    if ret == true then
+        print "found desired branch and moving on\n"
+    else
+        print "making new branch\n"
+        cmd = "git checkout " + defbase + " >/dev/null 2>&1"
+        system(cmd)
+        cmd = "git checkout -b " + branch + " >/dev/null 2>&1"
+        system(cmd)
+        cmd = "git push origin " + branch + " >/dev/null 2>&1"
+        system(cmd)
+    end
+
+    FileUtils.rm_rf(workdir + "/c")  # yes this deletes cwd
+}
+
+Dir.chdir(dash)
+Dir.delete(workdir)

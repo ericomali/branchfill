@@ -1,0 +1,11 @@
+{
+  "branchfill": {
+    "default": "master",
+
+    "urls": [
+      "https://user@github.com/company/buildbase.git",
+      "https://user@github.com/company/backend.git",
+      "https://user@github.com/company/webui.git"
+    ]
+  }
+}
